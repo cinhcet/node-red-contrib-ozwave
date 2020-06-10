@@ -1,0 +1,320 @@
+<script type="text/javascript">
+  RED.nodes.registerType('ozwave config', {
+    category: 'config',
+    defaults: {
+      port: {
+        value: '/dev/ttyACM0',
+        required: true
+      },
+      networkKey: {
+        value: ''
+      },
+      name: {
+        value: ''
+      }
+    },
+    label: function() {
+      return this.name || this.port;
+    }
+  });
+</script>
+
+<script type="text/x-red" data-template-name="ozwave config">
+  <div class="form-row">
+    <label for="node-config-input-port"><i class="fa fa-server"></i> Controller port</label>
+    <input type="text" id="node-config-input-port">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-networkKey"><i class="fa fa-lock"></i> Network key</label>
+    <input type="password" id="node-config-input-networkKey">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-config-input-name" placeholder="Name">
+  </div>
+</script>
+
+<script type="text/x-red" data-help-name="ozwave config">
+</script>
+
+
+
+
+<!-- ////////////////////////////////////////////////////////////////////// -->
+
+
+<script type="text/javascript">
+  RED.nodes.registerType('ozwave controller', {
+    category: 'zwave',
+    color: '#2196F3',
+    defaults: {
+      ozwaveController: {
+        value: "",
+        required: true,
+        type: "ozwave config"
+      },
+      name: {
+        value: ""
+      },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "hash.png",
+    label: function() {
+      return this.name || "Z-Wave controller";
+    }, 
+    paletteLabel: 'ozwave controller',
+    oneditprepare: function() {
+      var node = this;
+      $('#addDevice').click(function() {
+        controllerCommand('addDevice');
+      });
+      $('#addDeviceSecure').click(function() {
+        controllerCommand('addDeviceSecure');
+      });
+      $('#removeDevice').click(function() {
+        controllerCommand('removeDevice');
+      });
+      $('#cancelCommand').click(function() {
+        controllerCommand('cancelCommand');
+      });
+    }
+  });
+
+  function controllerCommand(action, params) {
+    $.post('ozwave/setControllerCommand', {action: action, params: params}, function() {});
+  }
+</script>
+
+<script type="text/x-red" data-template-name="ozwave controller">
+  <style>
+    .form-row-flex {
+      display: flex;
+      align-items: center;
+    }
+    .form-row-flex > input {
+      flex-grow: 1;
+    }
+  </style>
+  <div class="form-row form-row-flex">
+    <label for="node-input-ozwaveController"><i class="fa fa-globe"></i> Zwave Controller</label>
+    <input type="text" id="node-input-ozwaveController">
+  </div>
+  <div class="form-row form-row-flex">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+
+  <div class="form-row zwaveInfo" style="margin-top:30px; text-align: center;">
+    Controller commands
+  </div>
+  <div class="form-row" style="display: flex;">
+    <a id="addDevice" class="red-ui-button" style="flex-grow:1; margin: 0 10px;">Add Device</a>
+    <a id="addDeviceSecure" class="red-ui-button" style="flex-grow:1; margin: 0 10px;">Add Device Secure</a>
+    <a id="removeDevice" class="red-ui-button" style="flex-grow:1; margin: 0 10px;">Remove Device</a>
+  </div>
+  <div class="form-row" style="display: flex;">
+    <a id="cancelCommand" class="red-ui-button" style="flex-grow:1; margin: 0 10px;">Cancel Command</a>
+  </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="ozwave controller">
+</script>
+
+
+
+
+<!-- ////////////////////////////////////////////////////////////////////// -->
+
+
+
+<script type="text/javascript">
+  RED.nodes.registerType('ozwave device', {
+    category: 'zwave',
+    color: '#2196F3',
+    defaults: {
+      ozwaveController: {
+        value: "",
+        required: true,
+        type: "ozwave config"
+      },
+      deviceId: {
+        value: null,
+        validate: RED.validators.number(),
+        required: true
+      },
+      name: {
+        value: ""
+      },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "hash.png",
+    label: function() {
+      return this.name || "ID: " + this.deviceId;
+    }, 
+    paletteLabel: 'ozwave device',
+    oneditprepare: function() {
+      var node = this;
+      $('#node-input-deviceId').on('change autocompleteclose', function() {
+        getNodeInfo($('#node-input-deviceId').val());
+      });
+
+      try {
+        $("#node-input-deviceId").autocomplete("destroy");
+      } catch(e) {}
+      $('#searchDeviceId').click(function() {
+        $.getJSON('ozwave/getAllDevices', {listDevices: true}, function(data) {
+          console.log(data);
+          $("#node-input-deviceId").autocomplete({
+            source: data,
+            minLength:0,
+            close: function(event, ui) {
+              $("#node-input-deviceId").autocomplete("destroy");
+            }
+          }).autocomplete("search", "");
+        });
+      });
+
+      $('#zwaveNameBtn').click(function() {
+        setDeviceConfig($('#node-input-deviceId').val(), 'setDeviceName', $('#zwaveName').val());
+      });
+    }
+  });
+
+  function setDeviceConfig(deviceId, action, params) {
+    $.post('ozwave/setDeviceConfig', {deviceId: deviceId, action: action, params: params}, function() {
+      setTimeout(function() {
+        getNodeInfo($('#node-input-deviceId').val());
+      }, 500);
+    });
+  }
+
+  function getNodeInfo(deviceId) {
+    $.getJSON('ozwave/getDevice', {deviceId: deviceId}, function(data) {
+      if(data.ready) {
+        $('.zwaveInfo').text('Information about the device');
+        $('.zwaveName').show();
+        $('#zwaveName').val(data.name);
+        $('.zwaveLocation').show();
+        $('#zwaveLocation').text(data.loc);
+        $('.zwaveProduct').show();
+        $('#zwaveProduct').text(data.product);
+        $('.zwaveType').show();
+        $('#zwaveType').text(data.type);
+        $('.zwaveManufacturer').show();
+        $('#zwaveManufacturer').text(data.manufacturer);
+
+        $('.cmdClassesTreeList').show();
+        let cmdClassesList = $("#cmdClassesTreeList").css({width: "100%", height: "400px"}).treeList({})
+        let items = [];
+        Object.keys(data.cmdClasses).forEach(function(cmdClassKey) {
+          let cmdClass = data.cmdClasses[cmdClassKey];
+          let instances = [];
+          Object.keys(cmdClass).forEach(function(instanceKey) {
+            let instance = cmdClass[instanceKey];
+            let indices = [];
+            Object.keys(instance).forEach(function(indexKey) {
+              let index = instance[indexKey];
+              deviceDataItems = [];
+              Object.keys(index).forEach(function(deviceDataKey) {
+                let deviceData = index[deviceDataKey];
+                let item = {
+                  label: deviceDataKey + ': ' + deviceData
+                };
+                deviceDataItems.push(item);
+              });
+
+              let item = {
+                label: 'Index: ' + indexKey,
+                children: deviceDataItems
+              }; 
+              indices.push(item);            
+            });
+
+            let item = {
+              label: 'Instance: ' + instanceKey,
+              children: indices
+            }
+            instances.push(item);
+          });
+
+          let item = {
+            label: 'Command class: ' + cmdClassKey,
+            children: instances
+          };
+          items.push(item);
+        });
+        cmdClassesList.treeList('data', items);
+
+      } else {
+        $('.zwaveInfo').text('Device not found');
+        $('.zwaveName').hide();
+        $('.zwaveLocation').hide();
+        $('.zwaveProduct').hide();
+        $('.zwaveType').hide();
+        $('.zwaveManufacturer').hide();
+        $('.cmdClassesTreeList').hide();
+        $("#cmdClassesTreeList").treeList('empty');
+      }
+    });
+  }
+</script>
+
+<script type="text/x-red" data-template-name="ozwave device">
+  <style>
+    .form-row-flex {
+      display: flex;
+      align-items: center;
+    }
+    .form-row-flex > input {
+      flex-grow: 1;
+    }
+  </style>
+  <div class="form-row form-row-flex">
+    <label for="node-input-ozwaveController"><i class="fa fa-globe"></i> Zwave Controller</label>
+    <input type="text" id="node-input-ozwaveController">
+  </div>
+  <div class="form-row form-row-flex">
+    <label for="node-input-deviceId"><i class="fa fa-hashtag"></i> Device ID</label>
+    <input type="text" id="node-input-deviceId">
+    <a id="searchDeviceId" class="red-ui-button" style="margin-left: 8px;"><i class="fa fa-search"></i></a>
+  </div>
+  <div class="form-row form-row-flex">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  
+  <div class="form-row zwaveInfo" style="margin-top:30px; text-align: center;">
+    Device not found
+  </div>
+  <div class="form-row form-row-flex hidden zwaveName">
+    <label>Device name</label>
+    <input type="text" id="zwaveName">
+    <a id="zwaveNameBtn" class="red-ui-button" style="margin-left: 8px;"><i class="fa fa-check"></i></a>
+  </div>
+  <div class="form-row hidden zwaveLocation">
+    <label>Location</label>
+    <span id="zwaveLocation"></span>
+  </div>
+  <div class="form-row hidden zwaveProduct">
+    <label>Product</label>
+    <span id="zwaveProduct"></span>
+  </div>
+  <div class="form-row hidden zwaveType">
+    <label>Type</label>
+    <span id="zwaveType"></span>
+  </div>
+  <div class="form-row hidden zwaveType">
+    <label>Manufacturer</label>
+    <span id="zwaveManufacturer"></span>
+  </div>
+
+  <div class="form-row hidden cmdClassesTreeList" style="min-height: 100px">
+    <div id="cmdClassesTreeList"></div>
+  </div>
+</script>
+
+<script type="text/x-red" data-help-name="ozwave device">
+</script>

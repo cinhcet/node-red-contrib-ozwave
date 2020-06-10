@@ -1,0 +1,26 @@
+{
+  "name": "node-red-contrib-ozwave",
+  "version": "0.0.1",
+  "description": "openzwave nodes",
+  "keywords": [
+    "node-red"
+  ],
+  "node-red": {
+    "nodes": {
+      "ozwave": "ozwave.js"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cinhcet/node-red-contrib-ozwave.git"
+  },
+  "author": "cinhcet",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/cinhcet/node-red-contrib-ozwave/issues"
+  },
+  "homepage": "https://github.com/cinhcet/node-red-contrib-ozwave#readme",
+  "dependencies": {
+    "openzwave-shared": "^1.7.0"
+  }
+}
