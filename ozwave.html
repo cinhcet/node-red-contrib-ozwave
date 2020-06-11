@@ -193,7 +193,7 @@
 
   function getNodeInfo(deviceId) {
     $.getJSON('ozwave/getDevice', {deviceId: deviceId}, function(data) {
-      if(data.ready) {
+      if(data.canBeUsed) {
         $('.zwaveInfo').text('Information about the device');
         $('.zwaveName').show();
         $('#zwaveName').val(data.name);

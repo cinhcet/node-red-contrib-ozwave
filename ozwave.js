@@ -11,8 +11,9 @@ module.exports = function(RED) {
   var zwave = {
     driver: null,
     connected: false,
+    isConnecting: false,
     homeId: null,
-    devices: new Map()
+    devices: new Map(),
   };
 
   var numberOfConfigNodes = 0;
@@ -69,6 +70,7 @@ module.exports = function(RED) {
     node.zwave.driver.on('driver ready', function(homeId) {
       node.zwave.homeId = homeId;
       node.zwave.connected = true;
+      node.zwave.isConnecting = false;
       callControllerCallback('driverReady');
     });
   
@@ -83,7 +85,8 @@ module.exports = function(RED) {
       node.zwave.devices.set(deviceId, {
         cmdClasses: {},
         deviceId: deviceId,
-        ready: false
+        canBeUsed: false,
+        state: 'added'
       });
       console.log('node added', deviceId);
     });
@@ -102,7 +105,19 @@ module.exports = function(RED) {
       temp['type'] = device.type;
       temp['name'] = device.name;
       temp['loc'] = device.loc;
+
       console.log('node naming', deviceId);
+    });
+
+    node.zwave.driver.on('node available', function(deviceId) {
+      let temp = node.zwave.devices.get(deviceId);
+      if(!temp) {
+        node.error('device ' + deviceId + ' not available');
+        return;
+      }
+      temp['listeningDevice'] = node.zwave.driver.isNodeListeningDevice(deviceId);
+      temp['frequentListeningDevice'] = node.zwave.driver.isNodeFrequentListeningDevice(deviceId);
+      console.log(deviceId, 'available and listening', temp['listeningDevice']);
     });
 
     node.zwave.driver.on('node ready', function(deviceId, device) {
@@ -111,13 +126,21 @@ module.exports = function(RED) {
         node.error('device ' + deviceId + ' not available');
         return;
       }
-      temp['ready'] = true;
+      temp.canBeUsed = true;
+      temp.state = 'alive';
       callDeviceCallback(deviceId, 'nodeReady', true);
       console.log('node ready', deviceId);
     });
   
 
     node.zwave.driver.on('node removed', function(deviceId) {
+      let temp = node.zwave.devices.get(deviceId);
+      if(!temp) {
+        node.error('device ' + deviceId + ' not available');
+        return;
+      }
+      temp.canBeUsed = false;
+      temp.state = 'removed';
       console.log('removed', deviceId);
       node.zwave.devices.delete(deviceId);
       callDeviceCallback(deviceId, 'nodeRemoved', true);
@@ -177,6 +200,33 @@ module.exports = function(RED) {
     });
 
     node.zwave.driver.on('notification', function(deviceId, notification, help) {
+      let device = node.zwave.devices.get(deviceId);
+      if(!device) {
+        node.error('device ' + deviceId + ' not found');
+      } else {
+        if(notification === 3) {
+          //awake
+          device.canBeUsed = true;
+          device.state = 'awake';
+        } else if(notification === 4) {
+          //sleep
+          if(!device.isNodeListeningDevice) {
+            //only if the device is sleeping and a battery device
+            device.canBeUsed = true;
+          } else {
+            device.canBeUsed = false;
+          }
+          device.state = 'sleep';
+        } else if(notification === 5) {
+          //dead
+          device.canBeUsed = false;
+          device.state = 'dead';
+        } else if(notification === 6) {
+          //alive
+          device.canBeUsed = true;
+          device.state = 'alive';
+        }
+      }
       callDeviceCallback(deviceId, 'notification', {notification: notification, help: help});
       console.log('notification', deviceId, help);
     });
@@ -191,7 +241,8 @@ module.exports = function(RED) {
     });
 
     
-    if(!node.zwave.connected) {
+    if(!node.zwave.connected && !node.zwave.isConnecting) {
+      node.zwave.isConnecting = true;
       node.zwave.driver.connect(node.config.port);
     }
     
@@ -290,6 +341,23 @@ module.exports = function(RED) {
   /////////////////////////////////////////////////////////////////////////////
 
 
+  function setStatusDevice(node) {
+    let device = node.ozwaveController.zwave.devices.get(node.deviceId);
+    if(device) {
+      if(device.state === 'awake') {
+        node.status({fill: "green", shape:"ring", text:"awake"});
+      } else if(device.state === 'sleep') {
+        node.status({fill: "yellow", shape:"dot", text:"sleep"});
+      } else if(device.state === 'dead') {
+        node.status({fill: "red", shape:"dot", text:"dead"});
+      } else if(device.state === 'alive') {
+        node.status({fill: "green", shape: "dot", text: "alive"});
+      }
+    } else {
+      node.status({fill: "red", shape: "ring", text: "not found"});
+    }
+  }
+
   function ozwaveDevice(config) {
     RED.nodes.createNode(this, config);
     var node = this;
@@ -297,12 +365,8 @@ module.exports = function(RED) {
     node.deviceId = Number(node.config.deviceId);
     node.ozwaveController = RED.nodes.getNode(config.ozwaveController);
 
-    node.status({fill: "red", shape: "ring", text:"not found"});
-    let device = node.ozwaveController.zwave.devices.get(node.deviceId);
-    if(device && device.ready) {
-      node.status({fill: "green", shape:"dot", text:"ready"});
-    }
-    
+    node.status({fill: "red", shape: "ring", text: "not found"});
+    setStatusDevice(node);
 
     node.ozwaveController.subscribeDeviceId(node.deviceId, node, function(event, value) {
       if(event === 'valueChanged') {
@@ -319,19 +383,11 @@ module.exports = function(RED) {
         };
         node.send(msg);
       } else if(event === 'notification') {
-        if(value.notification === 3) {
-          node.status({fill: "green", shape:"ring", text:"awake"});
-        } else if(value.notification === 4) {
-          node.status({fill: "yellow", shape:"dot", text:"sleep"});
-        } else if(value.notification === 5) {
-          node.status({fill: "red", shape:"dot", text:"dead"});
-        } else if(value.notification === 6) {
-          node.status({fill: "green", shape:"dot", text:"alive"});
-        }
+        setStatusDevice(node);
       } else if(event === 'nodeReady') {
-        node.status({fill: "green", shape:"dot", text:"ready"});
+        setStatusDevice(node);
       } else if(event === 'nodeRemoved') {
-        node.status({fill: "red", shape: "ring", text:"removed"});
+        node.status({fill: "red", shape: "ring", text: "removed"});
       }
     });
 
