@@ -13,7 +13,7 @@ module.exports = function(RED) {
     connected: false,
     isConnecting: false,
     homeId: null,
-    devices: new Map(),
+    devices: new Map()
   };
 
   var numberOfConfigNodes = 0;

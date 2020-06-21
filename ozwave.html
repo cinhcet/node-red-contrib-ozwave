@@ -46,7 +46,7 @@
 <script type="text/javascript">
   RED.nodes.registerType('ozwave controller', {
     category: 'zwave',
-    color: '#2196F3',
+    color: '#32936F',
     defaults: {
       ozwaveController: {
         value: "",
@@ -59,7 +59,7 @@
     },
     inputs: 1,
     outputs: 1,
-    icon: "hash.png",
+    icon: "node-red-contrib-ozwave-icon.svg",
     label: function() {
       return this.name || "Z-Wave controller";
     }, 
@@ -132,7 +132,7 @@
 <script type="text/javascript">
   RED.nodes.registerType('ozwave device', {
     category: 'zwave',
-    color: '#2196F3',
+    color: '#32936F',
     defaults: {
       ozwaveController: {
         value: "",
@@ -150,7 +150,7 @@
     },
     inputs: 1,
     outputs: 1,
-    icon: "hash.png",
+    icon: "node-red-contrib-ozwave-icon.svg",
     label: function() {
       return this.name || "ID: " + this.deviceId;
     }, 
